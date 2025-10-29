@@ -41,7 +41,8 @@ const categories = {
 };
 
 // JSON URL → 請改成你 GitHub Pages 的完整 URL
-const jsonUrl = "https://computerproject135.github.io/trafficmonitoring/data/road_data.json";
+const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
+
 
 // 讀取 JSON 並更新地圖
 async function loadEvents() {
@@ -116,3 +117,4 @@ setInterval(loadEvents, 600000);
 </script>
 </body>
 </html>
+
