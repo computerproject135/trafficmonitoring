@@ -1,57 +1,119 @@
-const eventsJson = await response.json();
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>即時交通事件地圖</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  body { font-family: "Microsoft JhengHei", sans-serif; margin: 20px; }
+  h2 { text-align: center; }
+  #map { height: 600px; width: 100%; border-radius: 10px; margin-bottom: 10px; }
+  #event-list { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; border-radius: 6px; padding: 5px; }
+  .event-item { padding: 6px; border-bottom: 1px solid #eee; }
+  .event-item:hover { background-color: #f5f5f5; cursor: pointer; }
+  #last-update { margin-top: 10px; font-weight: bold; }
+</style>
+</head>
+<body>
 
-// 讀取更新時間
-const lastUpdate = eventsJson._last_update || new Date().toLocaleString();
+<h2>🚦 台灣即時交通事件地圖</h2>
+<div id="map"></div>
+<div id="last-update">上次更新時間: --</div>
+<div id="event-list"></div>
 
-// 更新上次讀取時間
-document.getElementById('last-update').innerText = "上次更新時間: " + lastUpdate;
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+let map = L.map('map').setView([23.7, 120.9], 7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-// 取事件資料
-const events = eventsJson.data || [];
+let markers = [];
+const categories = {
+  "事故": "red",
+  "交通管制": "purple",
+  "交通障礙": "yellow",
+  "其他": "blue",
+  "災變": "brown",
+  "號誌故障": "gray",
+  "道路施工": "orange",
+  "阻塞": "black"
+};
 
-// 清除舊標記
-markers.forEach(m => map.removeLayer(m));
-markers = [];
-const eventListDiv = document.getElementById('event-list');
-eventListDiv.innerHTML = '';
+// JSON URL → 改成你 GitHub 上的 raw URL
+const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
-events.forEach(event => {
-  const lat = parseFloat(event.y1);
-  const lng = parseFloat(event.x1);
-  if (!lat || !lng) return;
+// 讀取 JSON 並更新地圖
+async function loadEvents() {
+  try {
+    const response = await fetch(jsonUrl);
+    if (!response.ok) throw new Error("讀取 JSON 失敗");
+    const eventsJson = await response.json();
 
-  let category = "其他";
-  switch (event.roadtype) {
-    case "道路施工": category = "道路施工"; break;
-    case "交通事故": category = "事故"; break;
-    case "交通管制": category = "交通管制"; break;
-    case "阻塞": category = "阻塞"; break;
+    // 顯示最後更新時間
+    const lastUpdate = eventsJson._last_update || new Date().toLocaleString();
+    document.getElementById('last-update').innerText = "上次更新時間: " + lastUpdate;
+
+    const events = eventsJson.data || [];
+
+    // 清除舊標記
+    markers.forEach(m => map.removeLayer(m.marker));
+    markers = [];
+    const eventListDiv = document.getElementById('event-list');
+    eventListDiv.innerHTML = '';
+
+    events.forEach(event => {
+      const lat = parseFloat(event.y1);
+      const lng = parseFloat(event.x1);
+      if (!lat || !lng) return;
+
+      let category = "其他";
+      switch (event.roadtype) {
+        case "道路施工": category = "道路施工"; break;
+        case "交通事故": category = "事故"; break;
+        case "交通管制": category = "交通管制"; break;
+        case "阻塞": category = "阻塞"; break;
+      }
+      const color = categories[category] || "gray";
+
+      const marker = L.circleMarker([lat, lng], {
+        radius: 8,
+        color: "#000",
+        weight: 1,
+        fillColor: color,
+        fillOpacity: 0.8
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <b>${category}</b><br>
+        ${event.comment || "無描述"}<br>
+        <small>${event.happendate} ${event.happentime}</small><br>
+        <i>來源: ${event.srcdetail || "未知"}</i>
+      `);
+
+      markers.push({ marker, lat, lng });
+
+      const div = document.createElement('div');
+      div.className = 'event-item';
+      div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small> <i>[${event.srcdetail || "未知"}]</i>`;
+      div.onclick = () => {
+        map.setView([lat, lng], 14);
+        marker.openPopup();
+      };
+      eventListDiv.appendChild(div);
+    });
+
+  } catch (err) {
+    console.error(err);
+    alert("無法讀取 JSON，請確認 JSON 已 push 到 GitHub Pages 並使用正確 URL。");
   }
-  const color = categories[category] || "gray";
+}
 
-  const marker = L.circleMarker([lat, lng], {
-    radius: 8,
-    color: "#000",
-    weight: 1,
-    fillColor: color,
-    fillOpacity: 0.8
-  }).addTo(map);
+// 初始化載入
+loadEvents();
 
-  marker.bindPopup(`
-    <b>${category}</b><br>
-    ${event.comment || "無描述"}<br>
-    <small>${event.happendate} ${event.happentime}</small><br>
-    <i>來源: ${event.srcdetail || "未知"}</i>
-  `);
-
-  markers.push({ marker, lat, lng });
-
-  const div = document.createElement('div');
-  div.className = 'event-item';
-  div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small> <i>[${event.srcdetail || "未知"}]</i>`;
-  div.onclick = () => {
-    map.setView([lat, lng], 14);
-    marker.openPopup();
-  };
-  eventListDiv.appendChild(div);
-});
+// 每 10 分鐘自動更新一次
+setInterval(loadEvents, 600000);
+</script>
+</body>
+</html>
