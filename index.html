@@ -43,7 +43,6 @@ const categories = {
 // JSON URL → 改成你 GitHub 上的 raw URL
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
-// 讀取 JSON 並更新地圖
 async function loadEvents() {
   try {
     const response = await fetch(jsonUrl);
