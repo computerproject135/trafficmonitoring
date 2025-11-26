@@ -1,6 +1,27 @@
-<!-- 搜尋輸入框 -->
-<input type="text" id="search-input" placeholder="輸入道路名稱或事件關鍵字..." style="width: 100%; padding: 6px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #ccc;">
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>即時交通事件地圖</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  body { font-family: "Microsoft JhengHei", sans-serif; margin: 20px; }
+  h2 { text-align: center; }
+  #map { height: 600px; width: 100%; border-radius: 10px; margin-bottom: 10px; }
+  #event-list { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; border-radius: 6px; padding: 5px; }
+  .event-item { padding: 6px; border-bottom: 1px solid #eee; }
+  .event-item:hover { background-color: #f5f5f5; cursor: pointer; }
+  #last-update { margin-top: 10px; font-weight: bold; }
+  #search-container { margin-bottom: 10px; text-align: center; }
+  #search-input { width: 50%; padding: 5px; font-size: 16px; }
+</style>
+</head>
+<body>
 
+<h2>🚦 台灣即時交通事件地圖</h2>
+<div id="search-container">
+  <input type="text" id="search-input" placeholder="搜尋道路名稱、事件類型或描述">
+</div>
 <div id="map"></div>
 <div id="last-update">上次更新時間: --</div>
 <div id="event-list"></div>
@@ -13,6 +34,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let markers = [];
+let allEvents = [];
 const categories = {
   "事故": "red",
   "交通管制": "purple",
@@ -24,9 +46,8 @@ const categories = {
   "阻塞": "black"
 };
 
+// JSON URL → 改成你 GitHub 上的 raw URL
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
-
-let allEvents = []; // 用於儲存所有事件，方便搜尋
 
 async function loadEvents() {
   try {
@@ -34,6 +55,7 @@ async function loadEvents() {
     if (!response.ok) throw new Error("讀取 JSON 失敗");
     const eventsJson = await response.json();
 
+    // 顯示最後更新時間
     const lastUpdate = eventsJson._last_update || new Date().toLocaleString();
     document.getElementById('last-update').innerText = "上次更新時間: " + lastUpdate;
 
@@ -42,21 +64,25 @@ async function loadEvents() {
 
   } catch (err) {
     console.error(err);
-    alert("無法讀取 JSON，請確認 JSON 已 push 到 GitHub Pages 並使用正確 URL。");
+    alert("無法讀取 JSON，請確認 JSON 已 push 到 GitHub 並使用正確 URL。");
   }
 }
 
+// 顯示事件列表與地圖標記
 function displayEvents(events) {
   // 清除舊標記
   markers.forEach(m => map.removeLayer(m.marker));
   markers = [];
+
   const eventListDiv = document.getElementById('event-list');
   eventListDiv.innerHTML = '';
+
+  let bounds = [];
 
   events.forEach(event => {
     const lat = parseFloat(event.y1);
     const lng = parseFloat(event.x1);
-    if (!lat || !lng) return;
+    if (isNaN(lat) || isNaN(lng)) return; // 防呆
 
     let category = "其他";
     switch (event.roadtype) {
@@ -68,7 +94,7 @@ function displayEvents(events) {
     const color = categories[category] || "gray";
 
     const marker = L.circleMarker([lat, lng], {
-      radius: 8,
+      radius: 6,
       color: "#000",
       weight: 1,
       fillColor: color,
@@ -82,28 +108,38 @@ function displayEvents(events) {
       <i>來源: ${event.srcdetail || "未知"}</i>
     `);
 
-    markers.push({ marker, lat, lng });
+    markers.push({ marker });
+
+    bounds.push([lat, lng]);
 
     const div = document.createElement('div');
     div.className = 'event-item';
-    div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small> <i>[${event.srcdetail || "未知"}]</i>`;
-    div.onclick = () => {
-      map.setView([lat, lng], 14);
-      marker.openPopup();
+    div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small>`;
+    div.onclick = () => { 
+      map.setView([lat, lng], 14); 
+      marker.openPopup(); 
     };
     eventListDiv.appendChild(div);
   });
+
+  // 自動縮放地圖至所有標記
+  if(bounds.length > 0) map.fitBounds(bounds);
 }
 
-// 搜尋功能
+// 搜尋功能（Debounce）
+let searchTimeout;
 document.getElementById('search-input').addEventListener('input', function() {
-  const keyword = this.value.trim().toLowerCase();
-  const filtered = allEvents.filter(event => {
-    return (event.comment && event.comment.toLowerCase().includes(keyword)) ||
-           (event.roadname && event.roadname.toLowerCase().includes(keyword)) ||
-           (event.roadtype && event.roadtype.toLowerCase().includes(keyword));
-  });
-  displayEvents(filtered);
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const keyword = this.value.trim().toLowerCase();
+    const filtered = allEvents.filter(event => {
+      const road = (event.roadname || "").toLowerCase();
+      const type = (event.roadtype || "").toLowerCase();
+      const comment = (event.comment || "").toLowerCase();
+      return road.includes(keyword) || type.includes(keyword) || comment.includes(keyword);
+    });
+    displayEvents(filtered);
+  }, 300); // 300ms debounce
 });
 
 // 初始化載入
@@ -111,4 +147,7 @@ loadEvents();
 
 // 每 10 分鐘自動更新一次
 setInterval(loadEvents, 600000);
+
 </script>
+</body>
+</html>
