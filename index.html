@@ -1,22 +1,6 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-<meta charset="UTF-8">
-<title>即時交通事件地圖</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<style>
-  body { font-family: "Microsoft JhengHei", sans-serif; margin: 20px; }
-  h2 { text-align: center; }
-  #map { height: 600px; width: 100%; border-radius: 10px; margin-bottom: 10px; }
-  #event-list { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; border-radius: 6px; padding: 5px; }
-  .event-item { padding: 6px; border-bottom: 1px solid #eee; }
-  .event-item:hover { background-color: #f5f5f5; cursor: pointer; }
-  #last-update { margin-top: 10px; font-weight: bold; }
-</style>
-</head>
-<body>
+<!-- 搜尋輸入框 -->
+<input type="text" id="search-input" placeholder="輸入道路名稱或事件關鍵字..." style="width: 100%; padding: 6px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #ccc;">
 
-<h2>🚦 台灣即時交通事件地圖</h2>
 <div id="map"></div>
 <div id="last-update">上次更新時間: --</div>
 <div id="event-list"></div>
@@ -40,8 +24,9 @@ const categories = {
   "阻塞": "black"
 };
 
-// JSON URL → 改成你 GitHub 上的 raw URL
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
+
+let allEvents = []; // 用於儲存所有事件，方便搜尋
 
 async function loadEvents() {
   try {
@@ -49,58 +34,11 @@ async function loadEvents() {
     if (!response.ok) throw new Error("讀取 JSON 失敗");
     const eventsJson = await response.json();
 
-    // 顯示最後更新時間
     const lastUpdate = eventsJson._last_update || new Date().toLocaleString();
     document.getElementById('last-update').innerText = "上次更新時間: " + lastUpdate;
 
-    const events = eventsJson.data || [];
-
-    // 清除舊標記
-    markers.forEach(m => map.removeLayer(m.marker));
-    markers = [];
-    const eventListDiv = document.getElementById('event-list');
-    eventListDiv.innerHTML = '';
-
-    events.forEach(event => {
-      const lat = parseFloat(event.y1);
-      const lng = parseFloat(event.x1);
-      if (!lat || !lng) return;
-
-      let category = "其他";
-      switch (event.roadtype) {
-        case "道路施工": category = "道路施工"; break;
-        case "交通事故": category = "事故"; break;
-        case "交通管制": category = "交通管制"; break;
-        case "阻塞": category = "阻塞"; break;
-      }
-      const color = categories[category] || "gray";
-
-      const marker = L.circleMarker([lat, lng], {
-        radius: 8,
-        color: "#000",
-        weight: 1,
-        fillColor: color,
-        fillOpacity: 0.8
-      }).addTo(map);
-
-      marker.bindPopup(`
-        <b>${category}</b><br>
-        ${event.comment || "無描述"}<br>
-        <small>${event.happendate} ${event.happentime}</small><br>
-        <i>來源: ${event.srcdetail || "未知"}</i>
-      `);
-
-      markers.push({ marker, lat, lng });
-
-      const div = document.createElement('div');
-      div.className = 'event-item';
-      div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small> <i>[${event.srcdetail || "未知"}]</i>`;
-      div.onclick = () => {
-        map.setView([lat, lng], 14);
-        marker.openPopup();
-      };
-      eventListDiv.appendChild(div);
-    });
+    allEvents = eventsJson.data || [];
+    displayEvents(allEvents);
 
   } catch (err) {
     console.error(err);
@@ -108,11 +46,69 @@ async function loadEvents() {
   }
 }
 
+function displayEvents(events) {
+  // 清除舊標記
+  markers.forEach(m => map.removeLayer(m.marker));
+  markers = [];
+  const eventListDiv = document.getElementById('event-list');
+  eventListDiv.innerHTML = '';
+
+  events.forEach(event => {
+    const lat = parseFloat(event.y1);
+    const lng = parseFloat(event.x1);
+    if (!lat || !lng) return;
+
+    let category = "其他";
+    switch (event.roadtype) {
+      case "道路施工": category = "道路施工"; break;
+      case "交通事故": category = "事故"; break;
+      case "交通管制": category = "交通管制"; break;
+      case "阻塞": category = "阻塞"; break;
+    }
+    const color = categories[category] || "gray";
+
+    const marker = L.circleMarker([lat, lng], {
+      radius: 8,
+      color: "#000",
+      weight: 1,
+      fillColor: color,
+      fillOpacity: 0.8
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <b>${category}</b><br>
+      ${event.comment || "無描述"}<br>
+      <small>${event.happendate} ${event.happentime}</small><br>
+      <i>來源: ${event.srcdetail || "未知"}</i>
+    `);
+
+    markers.push({ marker, lat, lng });
+
+    const div = document.createElement('div');
+    div.className = 'event-item';
+    div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small> <i>[${event.srcdetail || "未知"}]</i>`;
+    div.onclick = () => {
+      map.setView([lat, lng], 14);
+      marker.openPopup();
+    };
+    eventListDiv.appendChild(div);
+  });
+}
+
+// 搜尋功能
+document.getElementById('search-input').addEventListener('input', function() {
+  const keyword = this.value.trim().toLowerCase();
+  const filtered = allEvents.filter(event => {
+    return (event.comment && event.comment.toLowerCase().includes(keyword)) ||
+           (event.roadname && event.roadname.toLowerCase().includes(keyword)) ||
+           (event.roadtype && event.roadtype.toLowerCase().includes(keyword));
+  });
+  displayEvents(filtered);
+});
+
 // 初始化載入
 loadEvents();
 
 // 每 10 分鐘自動更新一次
 setInterval(loadEvents, 600000);
 </script>
-</body>
-</html>
