@@ -18,7 +18,7 @@
 </head>
 <body>
 
-<h2>🚦 台灣即時交通事件地圖</h2>
+<h2> 台灣即時交通事件地圖</h2>
 <div id="search-container">
   <input type="text" id="search-input" placeholder="搜尋道路名稱、事件類型或描述">
 </div>
@@ -46,7 +46,7 @@ const categories = {
   "阻塞": "black"
 };
 
-// JSON URL → 改成你 GitHub 上的 raw URL
+
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
 async function loadEvents() {
@@ -68,9 +68,9 @@ async function loadEvents() {
   }
 }
 
-// 顯示事件列表與地圖標記
+
 function displayEvents(events) {
-  // 清除舊標記
+
   markers.forEach(m => map.removeLayer(m.marker));
   markers = [];
 
@@ -82,7 +82,7 @@ function displayEvents(events) {
   events.forEach(event => {
     const lat = parseFloat(event.y1);
     const lng = parseFloat(event.x1);
-    if (isNaN(lat) || isNaN(lng)) return; // 防呆
+    if (isNaN(lat) || isNaN(lng)) return; 
 
     let category = "其他";
     switch (event.roadtype) {
@@ -122,11 +122,9 @@ function displayEvents(events) {
     eventListDiv.appendChild(div);
   });
 
-  // 自動縮放地圖至所有標記
   if(bounds.length > 0) map.fitBounds(bounds);
 }
 
-// 搜尋功能（Debounce）
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', function() {
   clearTimeout(searchTimeout);
@@ -151,3 +149,4 @@ setInterval(loadEvents, 600000);
 </script>
 </body>
 </html>
+
