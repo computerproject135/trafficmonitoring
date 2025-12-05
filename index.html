@@ -14,14 +14,45 @@
   #last-update { margin-top: 10px; font-weight: bold; }
   #search-container { margin-bottom: 10px; text-align: center; }
   #search-input { width: 50%; padding: 5px; font-size: 16px; }
+
+  /* ---------- 手機版 RWD（關鍵部分） ---------- */
+  @media (max-width: 768px) {
+
+    body {
+      margin: 10px;
+    }
+
+    h2 {
+      font-size: 20px;
+    }
+
+    /* 地圖高度依螢幕調整 */
+    #map {
+      height: 70vh;   /* 70% 螢幕高度 */
+    }
+
+    /* 搜尋欄在手機變大 */
+    #search-input {
+      width: 90%;
+      font-size: 18px;
+      padding: 10px;
+    }
+
+    /* 清單高度避免太長 */
+    #event-list {
+      max-height: 40vh;
+    }
+  }
 </style>
 </head>
 <body>
 
 <h2> 台灣即時交通事件地圖</h2>
+
 <div id="search-container">
   <input type="text" id="search-input" placeholder="搜尋道路名稱、事件類型或描述">
 </div>
+
 <div id="map"></div>
 <div id="last-update">上次更新時間: --</div>
 <div id="event-list"></div>
@@ -29,12 +60,14 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 let map = L.map('map').setView([23.7, 120.9], 7);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
 let markers = [];
 let allEvents = [];
+
 const categories = {
   "事故": "red",
   "交通管制": "purple",
@@ -46,16 +79,15 @@ const categories = {
   "阻塞": "black"
 };
 
-
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
 async function loadEvents() {
   try {
     const response = await fetch(jsonUrl);
     if (!response.ok) throw new Error("讀取 JSON 失敗");
+
     const eventsJson = await response.json();
 
-    // 顯示最後更新時間
     const lastUpdate = eventsJson._last_update || new Date().toLocaleString();
     document.getElementById('last-update').innerText = "上次更新時間: " + lastUpdate;
 
@@ -67,7 +99,6 @@ async function loadEvents() {
     alert("無法讀取 JSON，請確認 JSON 已 push 到 GitHub 並使用正確 URL。");
   }
 }
-
 
 function displayEvents(events) {
 
@@ -82,7 +113,7 @@ function displayEvents(events) {
   events.forEach(event => {
     const lat = parseFloat(event.y1);
     const lng = parseFloat(event.x1);
-    if (isNaN(lat) || isNaN(lng)) return; 
+    if (isNaN(lat) || isNaN(lng)) return;
 
     let category = "其他";
     switch (event.roadtype) {
@@ -91,6 +122,7 @@ function displayEvents(events) {
       case "交通管制": category = "交通管制"; break;
       case "阻塞": category = "阻塞"; break;
     }
+
     const color = categories[category] || "gray";
 
     const marker = L.circleMarker([lat, lng], {
@@ -109,47 +141,48 @@ function displayEvents(events) {
     `);
 
     markers.push({ marker });
-
     bounds.push([lat, lng]);
 
     const div = document.createElement('div');
     div.className = 'event-item';
-    div.innerHTML = `<span style="color:${color};font-weight:bold">${category}</span> - ${event.comment || "無描述"} <small>(${event.happendate} ${event.happentime})</small>`;
-    div.onclick = () => { 
-      map.setView([lat, lng], 14); 
-      marker.openPopup(); 
+    div.innerHTML = `
+      <span style="color:${color};font-weight:bold">${category}</span> - 
+      ${event.comment || "無描述"} 
+      <small>(${event.happendate} ${event.happentime})</small>
+    `;
+
+    div.onclick = () => {
+      map.setView([lat, lng], 14);
+      marker.openPopup();
     };
+
     eventListDiv.appendChild(div);
   });
 
-  if(bounds.length > 0) map.fitBounds(bounds);
+  if (bounds.length > 0) map.fitBounds(bounds);
 }
 
 let searchTimeout;
 document.getElementById('search-input').addEventListener('input', function() {
   clearTimeout(searchTimeout);
+
   searchTimeout = setTimeout(() => {
     const keyword = this.value.trim().toLowerCase();
+
     const filtered = allEvents.filter(event => {
       const road = (event.roadname || "").toLowerCase();
       const type = (event.roadtype || "").toLowerCase();
       const comment = (event.comment || "").toLowerCase();
       return road.includes(keyword) || type.includes(keyword) || comment.includes(keyword);
     });
+
     displayEvents(filtered);
-  }, 300); // 300ms debounce
+  }, 300);
 });
 
-// 初始化載入
 loadEvents();
-
-// 每 10 分鐘自動更新一次
-setInterval(loadEvents, 600000);
+setInterval(loadEvents, 600000); // 每 10 分鐘更新
 
 </script>
 </body>
 </html>
-
-
-
-
