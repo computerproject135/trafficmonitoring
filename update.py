@@ -6,15 +6,15 @@ from datetime import datetime
 
 # ---------------------------
 # 設定檔案路徑與 GitHub 資訊
-LOCAL_JSON = r"C:\Users\user\OneDrive\桌面\專題實作\道路監測專題\data\road_data.json"
-LOCAL_JSON_RAW = r"C:\Users\user\OneDrive\桌面\專題實作\道路監測專題\data\road_data_raw.json"
-GITHUB_TOKEN = os.getenv("GH_TOKEN")
+LOCAL_JSON = "data/road_data.json"
+LOCAL_JSON_RAW = "data/road_data_raw.json"
+GITHUB_TOKEN = os.getenv("GH_TOKEN")  # 透過 GitHub Actions secret
 GITHUB_REPO = "computerproject135/trafficmonitoring"
 GITHUB_JSON_PATH = "data/road_data.json"
 GITHUB_JSON_PATH_RAW = "data/road_data_raw.json"
 DATA_URL = "https://data.moi.gov.tw/MoiOD/System/DownloadFile.aspx?DATA=36384FA8-FACF-432E-BB5B-5F015E7BC1BE"
 
-os.makedirs(os.path.dirname(LOCAL_JSON), exist_ok=True)
+os.makedirs("data", exist_ok=True)
 
 # ---------------------------
 # 下載最新資料
