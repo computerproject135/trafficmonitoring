@@ -3,12 +3,14 @@ import json
 import requests
 import base64
 from datetime import datetime
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # ---------------------------
 # 設定檔案路徑與 GitHub 資訊
 LOCAL_JSON = "data/road_data.json"
 LOCAL_JSON_RAW = "data/road_data_raw.json"
-GITHUB_TOKEN = os.getenv("GH_TOKEN")  # 透過 GitHub Actions secret
+GITHUB_TOKEN = os.getenv("GH_TOKEN")  # GitHub Actions secret
 GITHUB_REPO = "computerproject135/trafficmonitoring"
 GITHUB_JSON_PATH = "data/road_data.json"
 GITHUB_JSON_PATH_RAW = "data/road_data_raw.json"
@@ -17,13 +19,26 @@ DATA_URL = "https://data.moi.gov.tw/MoiOD/System/DownloadFile.aspx?DATA=36384FA8
 os.makedirs("data", exist_ok=True)
 
 # ---------------------------
+# 設置 requests Session，增加重試機制
+session = requests.Session()
+retry_strategy = Retry(
+    total=5,  # 最大重試次數
+    backoff_factor=2,  # 失敗後等待時間指數退避
+    status_forcelist=[429, 500, 502, 503, 504],  # 適用於重試的 HTTP 狀態碼
+    allowed_methods=["HEAD", "GET", "OPTIONS"]
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
+
+# ---------------------------
 # 下載最新資料
 try:
-    res = requests.get(DATA_URL, verify=False)
+    res = session.get(DATA_URL, timeout=(10, 60), verify=False)  # 連線10秒，讀取60秒
     res.raise_for_status()
     new_content_raw = res.content
 
-    # 直接寫入原始 JSON
+    # 寫入原始 JSON
     with open(LOCAL_JSON_RAW, "wb") as f:
         f.write(new_content_raw)
     print("原始資料已更新:", LOCAL_JSON_RAW)
@@ -59,10 +74,15 @@ def push_to_github(local_path, github_path):
 
     url_get = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    response = requests.get(url_get, headers=headers)
-    sha = response.json().get("sha") if response.status_code == 200 else None
 
-    url_put = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_path}"
+    try:
+        response = requests.get(url_get, headers=headers)
+        sha = response.json().get("sha") if response.status_code == 200 else None
+    except Exception as e:
+        print(f"取得 {github_path} SHA 失敗:", e)
+        sha = None
+
+    url_put = url_get
     data_payload = {
         "message": f"Update {os.path.basename(github_path)}",
         "content": base64.b64encode(content.encode()).decode(),
@@ -70,11 +90,14 @@ def push_to_github(local_path, github_path):
     if sha:
         data_payload["sha"] = sha
 
-    res = requests.put(url_put, headers=headers, json=data_payload)
-    if res.status_code in [200, 201]:
-        print(f"{os.path.basename(github_path)} 成功推送到 GitHub!")
-    else:
-        print(f"{os.path.basename(github_path)} 推送失敗:", res.json())
+    try:
+        res = requests.put(url_put, headers=headers, json=data_payload)
+        if res.status_code in [200, 201]:
+            print(f"{os.path.basename(github_path)} 成功推送到 GitHub!")
+        else:
+            print(f"{os.path.basename(github_path)} 推送失敗:", res.json())
+    except Exception as e:
+        print(f"{os.path.basename(github_path)} 推送失敗:", e)
 
 # ---------------------------
 # 強制推送每個 JSON 檔案
