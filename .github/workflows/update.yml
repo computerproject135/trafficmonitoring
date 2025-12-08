@@ -2,7 +2,7 @@ name: Update Road Data
 
 on:
   schedule:
-    - cron: "*/2 * * * *"   # 每 2 分鐘執行一次 (UTC 時區)
+    - cron: "*/5 * * * *"   # 每 2 分鐘執行一次 (UTC 時區)
   workflow_dispatch:        # 可手動觸發
 
 jobs:
