@@ -23,13 +23,13 @@ jobs:
 
     - name: Run update script
       env:
-        GH_TOKEN: ${{ secrets.GH_TOKEN }}   # 從 Secret 讀取
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: python update.py
 
-    - name: Commit and push JSON only
+    - name: Commit and push JSON only if changed
       run: |
         git config --global user.name "github-actions"
         git config --global user.email "github-actions@github.com"
         git add data/road_data.json data/road_data_raw.json
-        git commit -m "Auto update data" || echo "No changes to commit"
-        git push
+        git diff --cached --quiet || git commit -m "Auto update data"
+        git diff --cached --quiet || git push
