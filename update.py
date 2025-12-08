@@ -5,15 +5,16 @@ import base64
 from datetime import datetime
 
 # ---------------------------
-LOCAL_JSON = "data/road_data.json"
-LOCAL_JSON_RAW = "data/road_data_raw.json"
+# 設定檔案路徑與 GitHub 資訊
+LOCAL_JSON = r"C:\Users\user\OneDrive\桌面\專題實作\道路監測專題\data\road_data.json"
+LOCAL_JSON_RAW = r"C:\Users\user\OneDrive\桌面\專題實作\道路監測專題\data\road_data_raw.json"
 GITHUB_TOKEN = os.getenv("GH_TOKEN")
 GITHUB_REPO = "computerproject135/trafficmonitoring"
 GITHUB_JSON_PATH = "data/road_data.json"
 GITHUB_JSON_PATH_RAW = "data/road_data_raw.json"
 DATA_URL = "https://data.moi.gov.tw/MoiOD/System/DownloadFile.aspx?DATA=36384FA8-FACF-432E-BB5B-5F015E7BC1BE"
 
-os.makedirs("data", exist_ok=True)
+os.makedirs(os.path.dirname(LOCAL_JSON), exist_ok=True)
 
 # ---------------------------
 # 下載最新資料
@@ -22,22 +23,14 @@ try:
     res.raise_for_status()
     new_content_raw = res.content
 
-    # 先比對本地檔案是否有變化
-    if os.path.exists(LOCAL_JSON_RAW):
-        with open(LOCAL_JSON_RAW, "rb") as f:
-            old_content_raw = f.read()
-        if old_content_raw == new_content_raw:
-            print("原始資料未變動，跳過更新。")
-            exit()
-
+    # 直接寫入原始 JSON
     with open(LOCAL_JSON_RAW, "wb") as f:
         f.write(new_content_raw)
     print("原始資料已更新:", LOCAL_JSON_RAW)
 
-    # 處理 JSON
+    # 處理 JSON 並加入更新時間
     data = json.loads(new_content_raw)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     if isinstance(data, list):
         data_with_time = {"_last_update": timestamp, "data": data}
     elif isinstance(data, dict):
@@ -45,14 +38,6 @@ try:
         data_with_time["_last_update"] = timestamp
     else:
         raise ValueError("未知 JSON 類型")
-
-    # 比對已處理 JSON 是否變化
-    if os.path.exists(LOCAL_JSON):
-        with open(LOCAL_JSON, "r", encoding="utf-8") as f:
-            old_data = json.load(f)
-        if old_data == data_with_time:
-            print("處理後 JSON 未變動，跳過更新。")
-            exit()
 
     with open(LOCAL_JSON, "w", encoding="utf-8") as f:
         json.dump(data_with_time, f, ensure_ascii=False, indent=2)
@@ -91,5 +76,7 @@ def push_to_github(local_path, github_path):
     else:
         print(f"{os.path.basename(github_path)} 推送失敗:", res.json())
 
+# ---------------------------
+# 強制推送每個 JSON 檔案
 push_to_github(LOCAL_JSON, GITHUB_JSON_PATH)
 push_to_github(LOCAL_JSON_RAW, GITHUB_JSON_PATH_RAW)
