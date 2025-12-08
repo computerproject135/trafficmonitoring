@@ -2,8 +2,8 @@ name: Update Road Data
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # 每 5 分鐘執行一次 (UTC 時區)
-  workflow_dispatch:        # 可手動觸發
+    - cron: "*/5 * * * *"  # 每 5 分鐘執行一次 (UTC)
+  workflow_dispatch:        # 手動觸發
 
 jobs:
   update:
@@ -24,7 +24,9 @@ jobs:
     - name: Run update script
       env:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      run: python update.py
+      run: |
+        # 嘗試運行 update.py，如果下載失敗仍然不會中斷 workflow
+        python update.py || echo "Update script failed, skipping download"
 
     - name: Commit and push JSON (always)
       run: |
