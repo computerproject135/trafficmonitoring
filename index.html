@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>即時交通事件地圖</title>
+<title>台灣即時交通事件地圖</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
@@ -64,7 +64,7 @@
     background-color: #f5f5f5;
   }
 
-  /* RWD */
+  /* 手機版 */
   @media (max-width: 768px) {
     body { margin: 10px; }
     #map { height: 70vh; }
@@ -79,7 +79,7 @@
 <h2>台灣即時交通事件地圖</h2>
 
 <div id="search-container">
-  <input type="text" id="search-input" placeholder="搜尋道路名稱、事件類型或描述">
+  <input type="text" id="search-input" placeholder="搜尋事件類型或描述">
 </div>
 
 <div id="loading">資料更新中...</div>
@@ -97,8 +97,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-/* ------------------ 全域變數 ------------------ */
-const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
+/* ------------------ 變數 ------------------ */
+const jsonUrl =
+  "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
 let markers = [];
 let allEvents = [];
@@ -106,35 +107,39 @@ let lastUpdateTime = "";
 let firstLoad = true;
 
 /* ------------------ 類型顏色 ------------------ */
-const categories = {
+const categoryColors = {
   "事故": "red",
+  "阻塞": "black",
   "交通管制": "purple",
   "道路施工": "orange",
-  "阻塞": "black",
   "其他": "blue"
 };
 
-/* ------------------ 載入資料 ------------------ */
+/* ------------------ 載入資料（對齊 result） ------------------ */
 async function loadEvents() {
   try {
     document.getElementById("loading").style.display = "block";
 
-    const response = await fetch(jsonUrl);
+    const response = await fetch(jsonUrl + "?t=" + Date.now());
     if (!response.ok) throw new Error("JSON 讀取失敗");
 
-    const eventsJson = await response.json();
+    const json = await response.json();
+    const data = json.result || [];
 
-    /* 若資料未更新，直接結束 */
-    if (eventsJson._last_update === lastUpdateTime) {
+    /* 用最新一筆 modDttm 判斷是否更新 */
+    const newestTime = data.length > 0 ? data[0].modDttm : "";
+
+    if (lastUpdateTime && newestTime === lastUpdateTime) {
       document.getElementById("loading").style.display = "none";
       return;
     }
 
-    lastUpdateTime = eventsJson._last_update;
-    document.getElementById("last-update").innerText =
-      "上次更新時間：" + lastUpdateTime;
+    lastUpdateTime = newestTime;
 
-    allEvents = eventsJson.data || [];
+    document.getElementById("last-update").innerText =
+      "上次更新時間：" + (newestTime || "未知");
+
+    allEvents = data;
     displayEvents(allEvents);
 
     document.getElementById("loading").style.display = "none";
@@ -156,18 +161,13 @@ function displayEvents(events) {
 
   let bounds = [];
 
-  events.forEach(event => {
-    const lat = parseFloat(event.y1);
-    const lng = parseFloat(event.x1);
+  events.forEach(e => {
+    const lat = parseFloat(e.y1);
+    const lng = parseFloat(e.x1);
     if (isNaN(lat) || isNaN(lng)) return;
 
-    let category = "其他";
-    if (event.roadtype === "交通事故") category = "事故";
-    if (event.roadtype === "交通管制") category = "交通管制";
-    if (event.roadtype === "道路施工") category = "道路施工";
-    if (event.roadtype === "阻塞") category = "阻塞";
-
-    const color = categories[category];
+    const category = e.roadtype || "其他";
+    const color = categoryColors[category] || "gray";
 
     const marker = L.circleMarker([lat, lng], {
       radius: 6,
@@ -179,9 +179,9 @@ function displayEvents(events) {
 
     marker.bindPopup(`
       <b style="color:${color}">${category}</b><br>
-      ${event.comment || "無描述"}<br>
-      <small>${event.happendate} ${event.happentime}</small><br>
-      <i>來源：${event.srcdetail || "未知"}</i>
+      ${e.comment || "無描述"}<br>
+      <small>${e.happendate} ${e.happentime}</small><br>
+      <i>來源：${e.srcdetail || "未知"}</i>
     `);
 
     markers.push(marker);
@@ -191,8 +191,8 @@ function displayEvents(events) {
     div.className = "event-item";
     div.innerHTML = `
       <b style="color:${color}">${category}</b> -
-      ${event.comment || "無描述"}
-      <small>(${event.happendate} ${event.happentime})</small>
+      ${e.comment || "無描述"}
+      <small>(${e.happendate} ${e.happentime})</small>
     `;
 
     div.onclick = () => {
@@ -209,7 +209,8 @@ function displayEvents(events) {
   }
 
   if (events.length === 0) {
-    list.innerHTML = '<div style="text-align:center;color:#888;">查無資料</div>';
+    list.innerHTML =
+      '<div style="text-align:center;color:#888;">目前沒有事件</div>';
   }
 }
 
@@ -220,7 +221,6 @@ document.getElementById("search-input").addEventListener("input", function () {
   searchTimer = setTimeout(() => {
     const keyword = this.value.toLowerCase();
     const filtered = allEvents.filter(e =>
-      (e.roadname || "").toLowerCase().includes(keyword) ||
       (e.roadtype || "").toLowerCase().includes(keyword) ||
       (e.comment || "").toLowerCase().includes(keyword)
     );
@@ -230,9 +230,8 @@ document.getElementById("search-input").addEventListener("input", function () {
 
 /* ------------------ 啟動 ------------------ */
 loadEvents();
-setInterval(loadEvents, 60000); // 10 分鐘更新
+setInterval(loadEvents, 600000); // 10 分鐘更新
 </script>
 
 </body>
 </html>
-
