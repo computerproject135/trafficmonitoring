@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
 <style>
-  /* 全域字體與基本間距設定 */
   body {
     font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
     margin: 20px;
@@ -20,22 +19,11 @@
     color: #333;
   }
 
-  /* 地圖容器設定：確保地圖有高度才能顯示 */
-  #map {
-    height: 600px;
-    width: 100%;
-    border-radius: 10px;
-    margin-bottom: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  }
-
-  /* 搜尋框容器 */
   #search-container {
     text-align: center;
     margin-bottom: 10px;
   }
 
-  /* 搜尋輸入框樣式 */
   #search-input {
     width: 50%;
     padding: 10px;
@@ -44,16 +32,14 @@
     border-radius: 5px;
   }
 
-  /* 載入中提示 */
   #loading {
     text-align: center;
     font-weight: bold;
     color: #555;
-    display: none; /* 預設隱藏，讀取資料時才顯示 */
+    display: none;
     margin-bottom: 5px;
   }
 
-  /* 更新時間標籤 */
   #last-update {
     font-weight: bold;
     margin-bottom: 5px;
@@ -61,16 +47,31 @@
     color: #666;
   }
 
-  /* 下方事件列表容器：設定固定高度並允許捲動 */
+  /* 主容器：左地圖，右列表 */
+  #main-container {
+    display: flex;
+    gap: 10px;
+  }
+
+  /* 地圖佔剩餘空間 */
+  #map {
+    flex: 1;
+    height: 70vh;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+
+  /* 右側事件列表 */
   #event-list {
-    max-height: 300px;
+    flex: 0 0 300px; /* 固定寬度 */
+    max-height: 70vh;
     overflow-y: auto;
     border: 1px solid #ccc;
     border-radius: 6px;
     background: white;
+    padding: 5px;
   }
 
-  /* 單一事件項目樣式 */
   .event-item {
     padding: 10px;
     border-bottom: 1px solid #eee;
@@ -78,21 +79,25 @@
     transition: background 0.2s;
   }
 
-  /* 滑鼠移過清單項目時變色 */
   .event-item:hover {
     background-color: #f0f7ff;
   }
 
-  /* 手機版適應性設計 (RWD) */
   @media (max-width: 768px) {
-    body { margin: 10px; }
-    #map { height: 60vh; } /* 手機版地圖高度改為螢幕高度的 60% */
-    #search-input { width: 90%; font-size: 18px; }
-    #event-list { max-height: 40vh; }
+    #main-container {
+      flex-direction: column;
+    }
+    #map, #event-list {
+      width: 100%;
+      height: 50vh;
+    }
+    #search-input {
+      width: 90%;
+      font-size: 18px;
+    }
   }
 </style>
 </head>
-
 <body>
 
 <h2>台灣即時交通事件地圖</h2>
@@ -103,32 +108,30 @@
 
 <div id="loading">📡 資料同步中...</div>
 <div id="last-update">上次更新時間：--</div>
-<div id="map"></div>
-<div id="event-list"></div>
+
+<div id="main-container">
+  <div id="map"></div>
+  <div id="event-list"></div>
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
 <script>
 /* ------------------ 1. 地圖初始化 ------------------ */
-// 設定中心點在台灣 [緯度, 經度]，縮放層級 7
 const map = L.map('map').setView([23.7, 120.9], 7);
 
-// 使用 OpenStreetMap 的圖資
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap 貢獻者'
 }).addTo(map);
 
 /* ------------------ 2. 全域變數 ------------------ */
-// 資料來源：GitHub 上的 JSON 檔案
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
-let markers = [];      // 儲存地圖上所有的標記，方便清除與重繪
-let allEvents = [];    // 儲存從 API 取得的完整原始資料
-let lastUpdateTime = ""; // 紀錄最新的資料時間，避免無謂的重複重繪
-let firstLoad = true;  // 標記是否為第一次載入（用於自動調整視角）
+let markers = [];
+let allEvents = [];
+let lastUpdateTime = "";
+let firstLoad = true;
 
-/* ------------------ 3. 顏色分類定義 ------------------ */
-// 根據 roadtype 給予不同的顏色，方便使用者識別
+/* ------------------ 3. 顏色分類 ------------------ */
 const categoryColors = {
   "事故": "red",
   "阻塞": "black",
@@ -137,22 +140,18 @@ const categoryColors = {
   "其他": "blue"
 };
 
-/* ------------------ 4. 載入資料函式 ------------------ */
+/* ------------------ 4. 載入資料 ------------------ */
 async function loadEvents() {
   try {
     document.getElementById("loading").style.display = "block";
 
-    // 加上時間戳記 (?t=...) 避免瀏覽器抓到舊的快取資料
     const response = await fetch(jsonUrl + "?t=" + Date.now());
     if (!response.ok) throw new Error("JSON 讀取失敗");
 
     const json = await response.json();
-    const data = json.result || []; // 取得 result 陣列中的事件
+    const data = json.result || [];
 
-    // 檢查資料庫最新一筆的時間 (modDttm)
     const newestTime = data.length > 0 ? data[0].modDttm : "";
-
-    // 如果時間跟上次一樣，表示資料沒更新，直接跳過不處理
     if (lastUpdateTime && newestTime === lastUpdateTime) {
       document.getElementById("loading").style.display = "none";
       console.log("資料無更動，跳過重繪");
@@ -163,7 +162,7 @@ async function loadEvents() {
     document.getElementById("last-update").innerText = "資料時間：" + (newestTime || "未知");
 
     allEvents = data;
-    displayEvents(allEvents); // 呼叫顯示函式
+    displayEvents(allEvents);
 
     document.getElementById("loading").style.display = "none";
 
@@ -173,36 +172,32 @@ async function loadEvents() {
   }
 }
 
-/* ------------------ 5. 顯示事件（繪製地圖與清單） ------------------ */
+/* ------------------ 5. 顯示事件 ------------------ */
 function displayEvents(events) {
-  // A. 清除舊標記：重新畫地圖前，先移除舊的 Marker
   markers.forEach(m => map.removeLayer(m));
   markers = [];
 
   const list = document.getElementById("event-list");
-  list.innerHTML = ""; // 清空下方列表內容
+  list.innerHTML = "";
 
-  let bounds = []; // 用來存所有點的座標，以便調整地圖縮放範圍
+  let bounds = [];
 
-  // B. 遍歷每一筆事件
   events.forEach(e => {
     const lat = parseFloat(e.y1);
     const lng = parseFloat(e.x1);
-    if (isNaN(lat) || isNaN(lng)) return; // 沒座標就跳過
+    if (isNaN(lat) || isNaN(lng)) return;
 
     const category = e.roadtype || "其他";
     const color = categoryColors[category] || "gray";
 
-    // C. 建立圓形標記 (CircleMarker)
     const marker = L.circleMarker([lat, lng], {
       radius: 6,
-      color: "#000",      // 外框顏色
-      weight: 1,          // 外框粗細
-      fillColor: color,   // 填充顏色
-      fillOpacity: 0.8    // 透明度
+      color: "#000",
+      weight: 1,
+      fillColor: color,
+      fillOpacity: 0.8
     }).addTo(map);
 
-    // D. 設定彈出視窗 (Popup) 的內容
     marker.bindPopup(`
       <b style="color:${color}">${category}</b><br>
       <b>描述：</b>${e.comment || "無描述"}<br>
@@ -210,65 +205,53 @@ function displayEvents(events) {
       <i>來源：${e.srcdetail || "未知"}</i>
     `);
 
-    markers.push(marker); // 加入陣列追蹤
-    bounds.push([lat, lng]); // 加入範圍追蹤
+    markers.push(marker);
+    bounds.push([lat, lng]);
 
-    // E. 建立下方列表的 HTML 項目
     const div = document.createElement("div");
     div.className = "event-item";
     div.innerHTML = `
       <b style="color:${color}">${category}</b> - 
-      ${e.comment || "無描述"}
-      <br><small style="color:gray;">(${e.happendate} ${e.happentime})</small>
+      ${e.comment || "無描述"}<br>
+      <small style="color:gray;">(${e.happendate} ${e.happentime})</small>
     `;
 
-    // F. 點擊列表項目，地圖自動跳轉到該位置並打開 Popup
     div.onclick = () => {
-      map.setView([lat, lng], 14); // 縮放到層級 14 (街道級)
+      map.setView([lat, lng], 14);
       marker.openPopup();
     };
 
     list.appendChild(div);
   });
 
-  // G. 第一次載入時，自動調整地圖視角以包含所有的點
   if (bounds.length > 0 && firstLoad) {
     map.fitBounds(bounds);
     firstLoad = false;
   }
 
-  // H. 若無搜尋結果
   if (events.length === 0) {
     list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">目前沒有符合條件的事件</div>';
   }
 }
 
-/* ------------------ 6. 搜尋過濾功能（含 Debounce 防抖設計） ------------------ */
+/* ------------------ 6. 搜尋功能 ------------------ */
 let searchTimer;
 document.getElementById("search-input").addEventListener("input", function () {
-  // 當使用者在打字時，先清除計時器，避免每打一個字就重畫一次
   clearTimeout(searchTimer);
-  
-  // 使用者停下動作 300 毫秒後才執行搜尋，提升效能
   searchTimer = setTimeout(() => {
     const keyword = this.value.toLowerCase().trim();
-    
     const filtered = allEvents.filter(e =>
       (e.roadtype || "").toLowerCase().includes(keyword) ||
       (e.comment || "").toLowerCase().includes(keyword) ||
       (e.srcdetail || "").toLowerCase().includes(keyword)
     );
-    
     displayEvents(filtered);
   }, 300);
 });
 
-/* ------------------ 7. 啟動程式 ------------------ */
-// 頁面開啟後執行第一次載入
+/* ------------------ 7. 啟動 ------------------ */
 loadEvents();
-
-// 每 10 分鐘 (600,000 毫秒) 自動檢查一次新資料
-setInterval(loadEvents, 600000); 
+setInterval(loadEvents, 600000);
 </script>
 
 </body>
