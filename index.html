@@ -10,10 +10,13 @@
   body {
     font-family: "Microsoft JhengHei", sans-serif;
     margin: 20px;
+    background: #f5f7fa;
   }
 
   h2 {
     text-align: center;
+    color: #333;
+    margin-bottom: 10px;
   }
 
   #map {
@@ -21,6 +24,7 @@
     width: 100%;
     border-radius: 10px;
     margin-bottom: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   }
 
   #search-container {
@@ -32,6 +36,8 @@
     width: 50%;
     padding: 6px;
     font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
   }
 
   #loading {
@@ -45,23 +51,26 @@
   #last-update {
     font-weight: bold;
     margin-bottom: 5px;
+    color: #555;
   }
 
   #event-list {
     max-height: 300px;
     overflow-y: auto;
-    border: 1px solid #ccc;
-    border-radius: 6px;
   }
 
   .event-item {
-    padding: 6px;
-    border-bottom: 1px solid #eee;
+    background: linear-gradient(to right, #fff, #f0f8ff);
+    border-radius: 8px;
+    margin: 4px 0;
+    padding: 6px 10px;
+    transition: transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
   }
 
   .event-item:hover {
-    background-color: #f5f5f5;
+    transform: scale(1.02);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   }
 
   /* 手機版 */
@@ -93,29 +102,37 @@
 /* ------------------ 地圖初始化 ------------------ */
 const map = L.map('map').setView([23.7, 120.9], 7);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO'
 }).addTo(map);
 
 /* ------------------ 變數 ------------------ */
-const jsonUrl =
-  "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
+const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
 let markers = [];
 let allEvents = [];
 let lastUpdateTime = "";
 let firstLoad = true;
 
+/* ------------------ 類型 icon ------------------ */
+const categoryIcons = {
+  "事故": "🚨",
+  "阻塞": "⛔",
+  "道路施工": "🚧",
+  "交通管制": "⚠️",
+  "其他": "ℹ️"
+};
+
 /* ------------------ 類型顏色 ------------------ */
 const categoryColors = {
   "事故": "red",
   "阻塞": "black",
-  "交通管制": "purple",
   "道路施工": "orange",
+  "交通管制": "purple",
   "其他": "blue"
 };
 
-/* ------------------ 載入資料（對齊 result） ------------------ */
+/* ------------------ 載入資料 ------------------ */
 async function loadEvents() {
   try {
     document.getElementById("loading").style.display = "block";
@@ -126,7 +143,6 @@ async function loadEvents() {
     const json = await response.json();
     const data = json.result || [];
 
-    /* 用最新一筆 modDttm 判斷是否更新 */
     const newestTime = data.length > 0 ? data[0].modDttm : "";
 
     if (lastUpdateTime && newestTime === lastUpdateTime) {
@@ -135,7 +151,6 @@ async function loadEvents() {
     }
 
     lastUpdateTime = newestTime;
-
     document.getElementById("last-update").innerText =
       "上次更新時間：" + (newestTime || "未知");
 
@@ -168,21 +183,37 @@ function displayEvents(events) {
 
     const category = e.roadtype || "其他";
     const color = categoryColors[category] || "gray";
+    const iconEmoji = categoryIcons[category] || "ℹ️";
 
-    const marker = L.circleMarker([lat, lng], {
-      radius: 6,
-      color: "#000",
-      weight: 1,
-      fillColor: color,
-      fillOpacity: 0.8
+    const marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        html: `<span style="font-size:24px">${iconEmoji}</span>`,
+        className: ''
+      })
     }).addTo(map);
 
     marker.bindPopup(`
-      <b style="color:${color}">${category}</b><br>
-      ${e.comment || "無描述"}<br>
-      <small>${e.happendate} ${e.happentime}</small><br>
-      <i>來源：${e.srcdetail || "未知"}</i>
+      <div style="font-family:Microsoft JhengHei; line-height:1.4;">
+        <b style="color:${color}; font-size:16px">${category}</b><br>
+        <span>${e.comment || "無描述"}</span><br>
+        <small>${e.happendate} ${e.happentime}</small><br>
+        <i>來源: ${e.srcdetail || "未知"}</i>
+      </div>
     `);
+
+    // hover 放大動畫
+    marker.on('mouseover', function() {
+      this.setIcon(L.divIcon({
+        html: `<span style="font-size:32px">${iconEmoji}</span>`,
+        className: ''
+      }));
+    });
+    marker.on('mouseout', function() {
+      this.setIcon(L.divIcon({
+        html: `<span style="font-size:24px">${iconEmoji}</span>`,
+        className: ''
+      }));
+    });
 
     markers.push(marker);
     bounds.push([lat, lng]);
@@ -190,11 +221,10 @@ function displayEvents(events) {
     const div = document.createElement("div");
     div.className = "event-item";
     div.innerHTML = `
-      <b style="color:${color}">${category}</b> -
+      <b style="color:${color}">${iconEmoji} ${category}</b> -
       ${e.comment || "無描述"}
       <small>(${e.happendate} ${e.happentime})</small>
     `;
-
     div.onclick = () => {
       map.setView([lat, lng], 14);
       marker.openPopup();
@@ -214,7 +244,7 @@ function displayEvents(events) {
   }
 }
 
-/* ------------------ 搜尋（Debounce） ------------------ */
+/* ------------------ 搜尋 ------------------ */
 let searchTimer;
 document.getElementById("search-input").addEventListener("input", function () {
   clearTimeout(searchTimer);
@@ -230,7 +260,7 @@ document.getElementById("search-input").addEventListener("input", function () {
 
 /* ------------------ 啟動 ------------------ */
 loadEvents();
-setInterval(loadEvents, 600000); // 10 分鐘更新
+setInterval(loadEvents, 600000); // 每 10 分鐘更新
 </script>
 
 </body>
