@@ -8,24 +8,28 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
 <style>
-  body {
+  body, html {
+    margin: 0;
+    padding: 0;
     font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
-    margin: 20px;
+    height: 100%;
     background-color: #f9f9f9;
   }
 
   h2 {
     text-align: center;
     color: #333;
+    margin: 10px 0;
   }
 
   #search-container {
     text-align: center;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
   }
 
   #search-input {
     width: 50%;
+    max-width: 500px;
     padding: 10px;
     font-size: 16px;
     border: 1px solid #ccc;
@@ -42,29 +46,31 @@
 
   #last-update {
     font-weight: bold;
+    text-align: center;
     margin-bottom: 5px;
     font-size: 0.9em;
     color: #666;
   }
 
-  /* 主容器：左地圖，右列表 */
+  /* 主容器左右排版 */
   #main-container {
     display: flex;
+    height: calc(100vh - 160px); /* 留給標題、搜尋框、更新時間 */
     gap: 10px;
+    padding: 10px;
+    box-sizing: border-box;
   }
 
-  /* 地圖佔剩餘空間 */
   #map {
-    flex: 1;
-    height: 70vh;
+    flex: 1; /* 佔滿剩餘空間 */
+    height: 100%;
     border-radius: 10px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
   }
 
-  /* 右側事件列表 */
   #event-list {
     flex: 0 0 300px; /* 固定寬度 */
-    max-height: 70vh;
+    height: 100%;
     overflow-y: auto;
     border: 1px solid #ccc;
     border-radius: 6px;
@@ -86,6 +92,7 @@
   @media (max-width: 768px) {
     #main-container {
       flex-direction: column;
+      height: auto;
     }
     #map, #event-list {
       width: 100%;
@@ -116,14 +123,11 @@
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-/* ------------------ 1. 地圖初始化 ------------------ */
 const map = L.map('map').setView([23.7, 120.9], 7);
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap 貢獻者'
 }).addTo(map);
 
-/* ------------------ 2. 全域變數 ------------------ */
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
 let markers = [];
@@ -131,7 +135,6 @@ let allEvents = [];
 let lastUpdateTime = "";
 let firstLoad = true;
 
-/* ------------------ 3. 顏色分類 ------------------ */
 const categoryColors = {
   "事故": "red",
   "阻塞": "black",
@@ -140,21 +143,17 @@ const categoryColors = {
   "其他": "blue"
 };
 
-/* ------------------ 4. 載入資料 ------------------ */
 async function loadEvents() {
   try {
     document.getElementById("loading").style.display = "block";
-
     const response = await fetch(jsonUrl + "?t=" + Date.now());
     if (!response.ok) throw new Error("JSON 讀取失敗");
 
     const json = await response.json();
     const data = json.result || [];
-
     const newestTime = data.length > 0 ? data[0].modDttm : "";
     if (lastUpdateTime && newestTime === lastUpdateTime) {
       document.getElementById("loading").style.display = "none";
-      console.log("資料無更動，跳過重繪");
       return;
     }
 
@@ -163,7 +162,6 @@ async function loadEvents() {
 
     allEvents = data;
     displayEvents(allEvents);
-
     document.getElementById("loading").style.display = "none";
 
   } catch (err) {
@@ -172,14 +170,11 @@ async function loadEvents() {
   }
 }
 
-/* ------------------ 5. 顯示事件 ------------------ */
 function displayEvents(events) {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
-
   const list = document.getElementById("event-list");
   list.innerHTML = "";
-
   let bounds = [];
 
   events.forEach(e => {
@@ -210,31 +205,18 @@ function displayEvents(events) {
 
     const div = document.createElement("div");
     div.className = "event-item";
-    div.innerHTML = `
-      <b style="color:${color}">${category}</b> - 
-      ${e.comment || "無描述"}<br>
-      <small style="color:gray;">(${e.happendate} ${e.happentime})</small>
-    `;
-
-    div.onclick = () => {
-      map.setView([lat, lng], 14);
-      marker.openPopup();
-    };
-
+    div.innerHTML = `<b style="color:${color}">${category}</b> - ${e.comment || "無描述"}<br>
+                     <small style="color:gray;">(${e.happendate} ${e.happentime})</small>`;
+    div.onclick = () => { map.setView([lat, lng], 14); marker.openPopup(); };
     list.appendChild(div);
   });
 
-  if (bounds.length > 0 && firstLoad) {
-    map.fitBounds(bounds);
-    firstLoad = false;
-  }
-
+  if (bounds.length > 0 && firstLoad) { map.fitBounds(bounds); firstLoad = false; }
   if (events.length === 0) {
     list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">目前沒有符合條件的事件</div>';
   }
 }
 
-/* ------------------ 6. 搜尋功能 ------------------ */
 let searchTimer;
 document.getElementById("search-input").addEventListener("input", function () {
   clearTimeout(searchTimer);
@@ -249,7 +231,6 @@ document.getElementById("search-input").addEventListener("input", function () {
   }, 300);
 });
 
-/* ------------------ 7. 啟動 ------------------ */
 loadEvents();
 setInterval(loadEvents, 600000);
 </script>
