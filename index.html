@@ -8,113 +8,120 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
 <style>
-  body, html {
-    margin: 0;
-    padding: 0;
-    font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
-    height: 100%;
-    background-color: #f9f9f9;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
+  background-color: #f9f9f9;
+}
 
-  h2 {
-    text-align: center;
-    color: #333;
-    margin: 10px 0;
-  }
+h2 {
+  text-align: center;
+  margin: 8px 0;
+  color: #333;
+}
 
-  #search-container {
-    text-align: center;
-    margin-bottom: 5px;
-  }
+#search-container {
+  text-align: center;
+  margin-bottom: 5px;
+}
 
-  #search-input {
-    width: 50%;
-    max-width: 500px;
-    padding: 10px;
-    font-size: 16px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-  }
+#search-input {
+  width: 50%;
+  max-width: 500px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
 
-  #loading {
-    text-align: center;
-    font-weight: bold;
-    color: #555;
-    display: none;
-    margin-bottom: 5px;
-  }
+#loading {
+  text-align: center;
+  font-weight: bold;
+  color: #555;
+  display: none;
+}
 
-  #last-update {
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 5px;
-    font-size: 0.9em;
-    color: #666;
-  }
+#last-update {
+  text-align: center;
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 5px;
+}
 
-  /* 主容器左右排版 */
+/* ===== 主容器 ===== */
+#main-container {
+  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 150px);
+  gap: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* 地圖 */
+#map {
+  flex: 1;
+  min-height: 300px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* 事件列表 */
+#event-list {
+  flex: 0 0 320px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow-y: auto;
+}
+
+.event-item {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.event-item:hover {
+  background-color: #f0f7ff;
+}
+
+/* ===== 📱 手機版 ===== */
+@media (max-width: 768px) {
   #main-container {
-    display: flex;
-    height: calc(100vh - 160px); /* 留給標題、搜尋框、更新時間 */
-    gap: 10px;
-    padding: 10px;
-    box-sizing: border-box;
+    flex-direction: column;
+    height: auto;
   }
 
   #map {
-    flex: 1; /* 佔滿剩餘空間 */
-    height: 100%;
-    border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    height: 55vh;
+    min-height: 300px;
   }
 
   #event-list {
-    flex: 0 0 300px; /* 固定寬度 */
-    height: 100%;
-    overflow-y: auto;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    background: white;
-    padding: 5px;
+    height: 35vh;
+    flex: none;
   }
 
-  .event-item {
-    padding: 10px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
-    transition: background 0.2s;
+  #search-input {
+    width: 90%;
+    font-size: 18px;
   }
-
-  .event-item:hover {
-    background-color: #f0f7ff;
-  }
-
-  @media (max-width: 768px) {
-    #main-container {
-      flex-direction: column;
-      height: auto;
-    }
-    #map, #event-list {
-      width: 100%;
-      height: 50vh;
-    }
-    #search-input {
-      width: 90%;
-      font-size: 18px;
-    }
-  }
+}
 </style>
 </head>
+
 <body>
 
 <h2>台灣即時交通事件地圖</h2>
 
 <div id="search-container">
-  <input type="text" id="search-input" placeholder="搜尋關鍵字（如：國道、施工、事故）">
+  <input type="text" id="search-input" placeholder="搜尋關鍵字（事故、施工、國道）">
 </div>
 
 <div id="loading">📡 資料同步中...</div>
-<div id="last-update">上次更新時間：--</div>
+<div id="last-update">資料時間：--</div>
 
 <div id="main-container">
   <div id="map"></div>
@@ -124,9 +131,15 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 const map = L.map('map').setView([23.7, 120.9], 7);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap 貢獻者'
+  attribution: '&copy; OpenStreetMap'
 }).addTo(map);
+
+/* 📱 手機體驗優化 */
+if (window.innerWidth < 768) {
+  map.scrollWheelZoom.disable();
+}
 
 const jsonUrl = "https://raw.githubusercontent.com/computerproject135/trafficmonitoring/main/data/road_data.json";
 
@@ -146,35 +159,39 @@ const categoryColors = {
 async function loadEvents() {
   try {
     document.getElementById("loading").style.display = "block";
-    const response = await fetch(jsonUrl + "?t=" + Date.now());
-    if (!response.ok) throw new Error("JSON 讀取失敗");
 
-    const json = await response.json();
+    const res = await fetch(jsonUrl + "?t=" + Date.now());
+    const json = await res.json();
     const data = json.result || [];
-    const newestTime = data.length > 0 ? data[0].modDttm : "";
-    if (lastUpdateTime && newestTime === lastUpdateTime) {
+
+    const newest = data.length ? data[0].modDttm : "";
+    if (lastUpdateTime === newest) {
       document.getElementById("loading").style.display = "none";
       return;
     }
 
-    lastUpdateTime = newestTime;
-    document.getElementById("last-update").innerText = "資料時間：" + (newestTime || "未知");
+    lastUpdateTime = newest;
+    document.getElementById("last-update").innerText =
+      "資料時間：" + (newest || "未知");
 
     allEvents = data;
     displayEvents(allEvents);
+
     document.getElementById("loading").style.display = "none";
 
-  } catch (err) {
-    console.error(err);
-    document.getElementById("loading").innerText = "❌ 資料載入失敗，請稍後再試";
+  } catch (e) {
+    console.error(e);
+    document.getElementById("loading").innerText = "❌ 載入失敗";
   }
 }
 
 function displayEvents(events) {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
+
   const list = document.getElementById("event-list");
   list.innerHTML = "";
+
   let bounds = [];
 
   events.forEach(e => {
@@ -195,25 +212,36 @@ function displayEvents(events) {
 
     marker.bindPopup(`
       <b style="color:${color}">${category}</b><br>
-      <b>描述：</b>${e.comment || "無描述"}<br>
-      <b>時間：</b><small>${e.happendate} ${e.happentime}</small><br>
-      <i>來源：${e.srcdetail || "未知"}</i>
+      ${e.comment || "無描述"}<br>
+      <small>${e.happendate} ${e.happentime}</small>
     `);
 
     markers.push(marker);
     bounds.push([lat, lng]);
 
-    const div = document.createElement("div");
-    div.className = "event-item";
-    div.innerHTML = `<b style="color:${color}">${category}</b> - ${e.comment || "無描述"}<br>
-                     <small style="color:gray;">(${e.happendate} ${e.happentime})</small>`;
-    div.onclick = () => { map.setView([lat, lng], 14); marker.openPopup(); };
-    list.appendChild(div);
+    const item = document.createElement("div");
+    item.className = "event-item";
+    item.innerHTML = `
+      <b style="color:${color}">${category}</b><br>
+      ${e.comment || "無描述"}<br>
+      <small style="color:gray">${e.happendate} ${e.happentime}</small>
+    `;
+
+    item.onclick = () => {
+      map.setView([lat, lng], 14);
+      marker.openPopup();
+    };
+
+    list.appendChild(item);
   });
 
-  if (bounds.length > 0 && firstLoad) { map.fitBounds(bounds); firstLoad = false; }
-  if (events.length === 0) {
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">目前沒有符合條件的事件</div>';
+  if (bounds.length && firstLoad) {
+    map.fitBounds(bounds);
+    firstLoad = false;
+  }
+
+  if (!events.length) {
+    list.innerHTML = "<div style='padding:20px;text-align:center;color:#888'>無符合事件</div>";
   }
 }
 
@@ -221,13 +249,11 @@ let searchTimer;
 document.getElementById("search-input").addEventListener("input", function () {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
-    const keyword = this.value.toLowerCase().trim();
-    const filtered = allEvents.filter(e =>
-      (e.roadtype || "").toLowerCase().includes(keyword) ||
-      (e.comment || "").toLowerCase().includes(keyword) ||
-      (e.srcdetail || "").toLowerCase().includes(keyword)
-    );
-    displayEvents(filtered);
+    const k = this.value.toLowerCase();
+    displayEvents(allEvents.filter(e =>
+      (e.comment || "").toLowerCase().includes(k) ||
+      (e.roadtype || "").toLowerCase().includes(k)
+    ));
   }, 300);
 });
 
